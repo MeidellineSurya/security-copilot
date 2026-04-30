@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
-class Severity(str, Enum): # Only these 4 values are allowed — anything else gets rejected
+class Severity(str, Enum): # Only these 4 values are allowed, anything else gets rejected
     critical = "Critical"
     high = "High"
     medium = "Medium"
