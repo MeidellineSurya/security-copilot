@@ -6,13 +6,13 @@ from app.services.llm import reason, get_suggested_followups
 
 router = APIRouter()
 
-@router.post("/query", response_model=CopilotResponse) 
+@router.post("/query", response_model=CopilotResponse)
 async def copilot_query(payload: CopilotQuery):
     """
-    Main copilot endpoint.
-    Flow: retrieve → build context → LLM reason → format response
+    Main copilot endpoint — now with function calling.
+    The LLM can now decide to fetch additional data or take actions.
     """
-    # 1. Retrieval layer
+    # 1. Retrieval — initial context
     assessment = await get_assessment(payload.assessment_id)
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
@@ -21,14 +21,16 @@ async def copilot_query(payload: CopilotQuery):
 
     # 2. Context builder
     context = build_context(assessment, risks)
-
-    # 3. Build messages (with memory)
     messages = build_messages(context, payload.query, payload.conversation_history)
 
-    # 4. LLM reasoning
-    result = await reason(messages, context)
+    # 3. LLM reasoning — now with assessment_id for function calling
+    result = await reason(
+        messages=messages,
+        context=context,
+        assessment_id=payload.assessment_id  # ← new: enables tool use
+    )
 
-    # 5. Format response
+    # 4. Format response
     followups = get_suggested_followups(payload.query)
 
     return CopilotResponse(

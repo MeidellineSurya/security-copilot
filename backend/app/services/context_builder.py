@@ -2,13 +2,13 @@ from typing import List
 
 def build_context(assessment: dict, risks: List[dict]) -> str:
     """
-    Convert raw DB data into a structured, LLM-friendly context block.
-    This is what separates a copilot from a generic chatbot.
+    Convert raw DB data into structured LLM-friendly context block.
+    Includes real Risk IDs so the LLM can use them in tool calls.
     """
     if not assessment or not risks:
         return "No risk data available for this assessment."
 
-    lines = [ # takes raw MongoDB documents to build clean numbered briefing document
+    lines = [
         f"Company: {assessment.get('company', 'Unknown')}",
         f"Industry: {assessment.get('industry', 'Unknown')}",
         f"Assessment scope: {assessment.get('scope', 'Unknown')}",
@@ -23,16 +23,17 @@ def build_context(assessment: dict, risks: List[dict]) -> str:
             f"{i}. [{risk['severity'].upper()}] {risk['title']} "
             f"(Score: {risk['score']}/100)"
         )
+        # Include real MongoDB ID so LLM can pass it to update_risk_status tool
+        lines.append(f"   Risk ID: {risk.get('id', 'unknown')}")
         lines.append(f"   Category: {risk['category']}")
         lines.append(f"   Description: {risk['description']}")
         lines.append(f"   Remediation: {risk['remediation']}")
+        lines.append(f"   Status: {risk.get('status', 'open')}")
         lines.append("")
 
     return "\n".join(lines)
 
 
-# personality and ruleset of copilot.
-# key rule: only reason over provided data to prevent hallucination
 SYSTEM_PROMPT = """You are an expert cybersecurity consultant and analyst.
 
 You have been given structured risk assessment data for a client. Your job is to:
@@ -41,6 +42,12 @@ You have been given structured risk assessment data for a client. Your job is to
 3. Give actionable, specific recommendations — not generic advice
 4. Explain technical risks in both business and technical terms
 5. Never invent risks or data not present in the context
+
+You have access to tools that let you fetch specific data, update risk statuses, and search by category.
+When you use a tool, NEVER show the raw tool call or function syntax in your response.
+Always present tool results in clean, professional language as if you retrieved the information naturally.
+When updating a risk status, use the exact Risk ID provided in the context above.
+After marking a risk as resolved or updating a status, confirm it clearly in plain English.
 
 Tone: Professional, direct, consultant-grade. Not a chatbot.
 
@@ -52,7 +59,7 @@ Format your response with:
 """
 
 def build_messages(context: str, query: str, history: list) -> list:
-    """Build the full messages array for the Anthropic API."""
+    """Build the full messages array for the LLM."""
     user_content = f"""Current risk assessment context:
 
 {context}
@@ -61,6 +68,6 @@ def build_messages(context: str, query: str, history: list) -> list:
 
 Analyst question: {query}"""
 
-    messages = list(history)  # preserve conversation memory from all previous turns
-    messages.append({"role": "user", "content": user_content}) # this allows followup questions
+    messages = list(history)
+    messages.append({"role": "user", "content": user_content})
     return messages
