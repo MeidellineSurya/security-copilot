@@ -63,3 +63,14 @@ async def sync_status(assessment_id: str):
         "aws_sourced": aws_sourced,
         "manual": total - aws_sourced,
     }
+
+
+@router.post("/test-alert")
+async def test_alert():
+    """
+    Send a test alert email to verify Resend is configured correctly.
+    Use this to confirm email works before relying on the nightly sync.
+    """
+    from app.services.alert_service import send_test_alert
+    result = await send_test_alert()
+    return result
