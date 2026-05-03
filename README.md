@@ -99,3 +99,16 @@ frontend/
 - Add a risk dashboard view alongside the copilot
 - Implement "Consultant Mode" with tone/audience switching
 - Persist chat history per assessment in MongoDB
+
+## Deployment
+
+### Backend (Railway)
+- URL: `https://your-railway-url.up.railway.app`
+- Health check: `https://your-railway-url.up.railway.app/health`
+- API docs: `https://your-railway-url.up.railway.app/docs`
+
+### Frontend (Vercel)
+- URL: `https://your-vercel-url.vercel.app`
+
+### Environment Variables
+Set all variables from `.env.example` in Railway dashboard under Variables tab.

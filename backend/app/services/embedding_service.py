@@ -1,23 +1,26 @@
-from openai import OpenAI
-from pinecone import Pinecone
-from datetime import datetime
 from app.core.config import settings
+from datetime import datetime
 
-# Initialize clients
-openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-index = pc.Index(settings.PINECONE_INDEX)
+# Only initialize clients if keys are available
+openai_client = None
+index = None
 
-EMBEDDING_MODEL = "text-embedding-3-small"  # 1536 dimensions, cheap and accurate
+if settings.OPENAI_API_KEY and settings.PINECONE_API_KEY:
+    try:
+        from openai import OpenAI
+        from pinecone import Pinecone
+        openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+        index = pc.Index(settings.PINECONE_INDEX)
+    except Exception as e:
+        print(f"[Warning] Vector memory unavailable: {e}")
+
+EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def get_embedding(text: str) -> list[float]:
-    """
-    Convert text into a 1536-dimensional vector using OpenAI.
-
-    This is the core operation that enables semantic search.
-    Similar text → similar vectors → findable by meaning not keywords.
-    """
+    if not openai_client:
+        return []
     response = openai_client.embeddings.create(
         model=EMBEDDING_MODEL,
         input=text,
@@ -31,45 +34,30 @@ async def store_conversation_turn(
     answer: str,
     session_id: str = None,
 ) -> dict:
-    """
-    Store a conversation turn in Pinecone for long-term memory.
+    if not index or not openai_client:
+        return {"stored": False, "reason": "Vector memory not configured"}
 
-    We embed the query + answer together so semantic search
-    can find this memory when similar questions are asked later.
-
-    Args:
-        assessment_id: links memory to a specific assessment
-        query: what the user asked
-        answer: what the LLM responded
-        session_id: optional session identifier
-    """
-    # Combine query + answer for richer embedding
     combined_text = f"Question: {query}\nAnswer: {answer}"
     embedding = get_embedding(combined_text)
+    if not embedding:
+        return {"stored": False, "reason": "Embedding failed"}
 
-    # Create a unique ID for this memory
     timestamp = datetime.utcnow().isoformat()
     vector_id = f"{assessment_id}_{timestamp}"
 
-    # Store in Pinecone with metadata
-    # Metadata lets us filter searches by assessment_id
     index.upsert(vectors=[{
         "id": vector_id,
         "values": embedding,
         "metadata": {
             "assessment_id": assessment_id,
-            "query": query[:500],        # truncate for metadata limit
-            "answer": answer[:1000],     # truncate for metadata limit
+            "query": query[:500],
+            "answer": answer[:1000],
             "timestamp": timestamp,
             "session_id": session_id or "unknown",
         }
     }])
 
-    return {
-        "stored": True,
-        "vector_id": vector_id,
-        "assessment_id": assessment_id,
-    }
+    return {"stored": True, "vector_id": vector_id}
 
 
 async def search_relevant_memories(
@@ -77,32 +65,22 @@ async def search_relevant_memories(
     query: str,
     top_k: int = 3,
 ) -> list[dict]:
-    """
-    Search Pinecone for past conversations relevant to the current query.
+    if not index or not openai_client:
+        return []
 
-    Uses cosine similarity to find the most semantically similar
-    past Q&A pairs — regardless of exact wording.
-
-    Args:
-        assessment_id: only search memories for this assessment
-        query: the current user question
-        top_k: how many memories to retrieve (default 3)
-
-    Returns:
-        List of relevant past Q&A pairs sorted by relevance
-    """
     query_embedding = get_embedding(query)
+    if not query_embedding:
+        return []
 
     results = index.query(
         vector=query_embedding,
         top_k=top_k,
-        filter={"assessment_id": {"$eq": assessment_id}},  # scoped to assessment
+        filter={"assessment_id": {"$eq": assessment_id}},
         include_metadata=True,
     )
 
     memories = []
     for match in results.matches:
-        # Only include memories with decent similarity score
         if match.score > 0.75:
             memories.append({
                 "query": match.metadata.get("query", ""),
@@ -115,10 +93,6 @@ async def search_relevant_memories(
 
 
 def format_memories_for_context(memories: list[dict]) -> str:
-    """
-    Format retrieved memories into a readable context block
-    that can be injected into the LLM prompt.
-    """
     if not memories:
         return ""
 
