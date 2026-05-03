@@ -108,7 +108,7 @@ frontend/
 - API docs: https://security-copilot-production.up.railway.app/docs
 
 ### Frontend (Vercel)
-- URL: `https://your-vercel-url.vercel.app`
+- URL: https://security-copilot-six.vercel.app/ 
 
 ### Environment Variables
 Set all variables from `.env.example` in Railway dashboard under Variables tab.
