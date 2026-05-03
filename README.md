@@ -103,9 +103,9 @@ frontend/
 ## Deployment
 
 ### Backend (Railway)
-- URL: `https://your-railway-url.up.railway.app`
-- Health check: `https://your-railway-url.up.railway.app/health`
-- API docs: `https://your-railway-url.up.railway.app/docs`
+- URL: https://security-copilot-production.up.railway.app/
+- Health check: https://security-copilot-production.up.railway.app/health
+- API docs: https://security-copilot-production.up.railway.app/docs
 
 ### Frontend (Vercel)
 - URL: `https://your-vercel-url.vercel.app`
